@@ -3,17 +3,35 @@ import {
     createDataFrame,
     serializeFrame
 } from "./protocol.js";
-const fileInput = document.getElementById("fileInput");
 
-const fileInfo = document.getElementById("fileInfo");
 
-const fileName = document.getElementById("fileName");
-const fileType = document.getElementById("fileType");
-const fileSize = document.getElementById("fileSize");
-const bytesLoaded = document.getElementById("bytesLoaded");
+// ============================================
+// DOM ELEMENTS
+// ============================================
 
-const chunkSize = document.getElementById("chunkSize");
-const totalChunksElement = document.getElementById("totalChunks");
+const fileInput =
+    document.getElementById("fileInput");
+
+const fileInfo =
+    document.getElementById("fileInfo");
+
+const fileName =
+    document.getElementById("fileName");
+
+const fileType =
+    document.getElementById("fileType");
+
+const fileSize =
+    document.getElementById("fileSize");
+
+const bytesLoaded =
+    document.getElementById("bytesLoaded");
+
+const chunkSize =
+    document.getElementById("chunkSize");
+
+const totalChunksElement =
+    document.getElementById("totalChunks");
 
 const reconstructedBytes =
     document.getElementById("reconstructedBytes");
@@ -21,7 +39,17 @@ const reconstructedBytes =
 const chunkIntegrity =
     document.getElementById("chunkIntegrity");
 
+
+// ============================================
+// CONFIGURATION
+// ============================================
+
 const CHUNK_SIZE = 1024;
+
+
+// ============================================
+// FILE SELECTION
+// ============================================
 
 fileInput.addEventListener(
     "change",
@@ -29,19 +57,26 @@ fileInput.addEventListener(
 );
 
 
+// ============================================
+// MAIN FILE PROCESSING
+// ============================================
+
 async function handleFileSelection(event) {
 
-    const file = event.target.files[0];
+    const file =
+        event.target.files[0];
 
     if (!file) {
         return;
     }
 
-    // -----------------------------
-    // 1. Display file information
-    // -----------------------------
 
-    fileName.textContent = file.name;
+    // ----------------------------------------
+    // 1. Display file information
+    // ----------------------------------------
+
+    fileName.textContent =
+        file.name;
 
     fileType.textContent =
         file.type || "Unknown";
@@ -54,9 +89,9 @@ async function handleFileSelection(event) {
 
     try {
 
-        // -----------------------------
+        // ------------------------------------
         // 2. Read file into memory
-        // -----------------------------
+        // ------------------------------------
 
         const arrayBuffer =
             await file.arrayBuffer();
@@ -68,9 +103,9 @@ async function handleFileSelection(event) {
             `${bytes.length.toLocaleString()} bytes`;
 
 
-        // -----------------------------
+        // ------------------------------------
         // 3. Split file into chunks
-        // -----------------------------
+        // ------------------------------------
 
         const chunks =
             splitIntoChunks(
@@ -88,28 +123,28 @@ async function handleFileSelection(event) {
             totalChunks.toLocaleString();
 
 
-        // -----------------------------
+        // ------------------------------------
         // 4. Reconstruct file
-        // -----------------------------
+        // ------------------------------------
 
         const reconstructed =
-            reconstructFromChunks(chunks);
-
+            reconstructFromChunks(
+                chunks
+            );
 
         reconstructedBytes.textContent =
             `${reconstructed.length.toLocaleString()} bytes`;
 
 
-        // -----------------------------
-        // 5. Verify integrity
-        // -----------------------------
+        // ------------------------------------
+        // 5. Verify chunk integrity
+        // ------------------------------------
 
         const isValid =
             compareBytes(
                 bytes,
                 reconstructed
             );
-
 
         if (isValid) {
 
@@ -123,52 +158,87 @@ async function handleFileSelection(event) {
         }
 
 
-        // -----------------------------
-        // 6. Debug information
-        // -----------------------------
+        // ------------------------------------
+        // 6. Create transfer session
+        // ------------------------------------
+
+        const sessionId =
+            createSessionId();
+
+
+        // ------------------------------------
+        // 7. Create protocol frames
+        // ------------------------------------
+
+        const frames = [];
+
+        for (
+            let i = 0;
+            i < chunks.length;
+            i++
+        ) {
+
+            const frame =
+                createDataFrame(
+                    sessionId,
+                    i,
+                    totalChunks,
+                    chunks[i]
+                );
+
+            frames.push(frame);
+        }
+
+
+        // ------------------------------------
+        // 8. Debug frame information
+        // ------------------------------------
 
         console.log(
-            "File loaded successfully"
+            "================================"
         );
 
         console.log(
-            "File name:",
-            file.name
+            "FRAME PROTOCOL"
         );
 
         console.log(
-            "Original bytes:",
-            bytes.length
+            "================================"
         );
 
         console.log(
-            "Chunk size:",
-            CHUNK_SIZE
+            "Session ID:",
+            sessionId
         );
 
         console.log(
-            "Total chunks:",
-            totalChunks
+            "Total frames:",
+            frames.length
         );
 
         console.log(
-            "Reconstructed bytes:",
-            reconstructed.length
+            "First frame:",
+            frames[0]
         );
 
         console.log(
-            "Chunk integrity:",
-            isValid
+            "Serialized first frame:",
+            serializeFrame(frames[0])
         );
 
         console.log(
-            "First chunk:",
-            chunks[0]
+            "Serialized frame size:",
+            serializeFrame(frames[0]).length,
+            "characters"
         );
 
         console.log(
-            "Last chunk:",
-            chunks[chunks.length - 1]
+            "Last frame:",
+            frames[frames.length - 1]
+        );
+
+        console.log(
+            "================================"
         );
 
 
@@ -185,9 +255,10 @@ async function handleFileSelection(event) {
 }
 
 
-/*
- * Split the file into fixed-size chunks.
- */
+// ============================================
+// CHUNKING
+// ============================================
+
 function splitIntoChunks(
     bytes,
     chunkSize
@@ -214,11 +285,13 @@ function splitIntoChunks(
 }
 
 
-/*
- * Reconstruct the original byte array
- * from the chunks.
- */
-function reconstructFromChunks(chunks) {
+// ============================================
+// RECONSTRUCTION
+// ============================================
+
+function reconstructFromChunks(
+    chunks
+) {
 
     let totalLength = 0;
 
@@ -237,7 +310,6 @@ function reconstructFromChunks(chunks) {
 
     let offset = 0;
 
-
     for (const chunk of chunks) {
 
         reconstructed.set(
@@ -254,9 +326,10 @@ function reconstructFromChunks(chunks) {
 }
 
 
-/*
- * Compare two Uint8Arrays byte by byte.
- */
+// ============================================
+// BYTE COMPARISON
+// ============================================
+
 function compareBytes(
     original,
     reconstructed
@@ -291,11 +364,13 @@ function compareBytes(
 }
 
 
-/*
- * Convert bytes into a
- * human-readable file size.
- */
-function formatFileSize(bytes) {
+// ============================================
+// FILE SIZE FORMATTER
+// ============================================
+
+function formatFileSize(
+    bytes
+) {
 
     if (bytes === 0) {
         return "0 Bytes";
