@@ -7,7 +7,7 @@
 
     <title>QR Optical File Transfer</title>
 
-  <script type="module" crossorigin src="/assets/index-DQDG1cg3.js"></script>
+  <script type="module" crossorigin src="/assets/index-h-kfv-6l.js"></script>
   <link rel="stylesheet" crossorigin href="/assets/index-VPwDvwpn.css">
 </head>
 
@@ -21,6 +21,11 @@
             Sender
         </p>
 
+
+        <!-- ============================================
+             FILE SELECTION
+             ============================================ -->
+
         <section class="card">
 
             <h2>Select File</h2>
@@ -30,6 +35,7 @@
             </p>
 
             <input type="file" id="fileInput">
+
 
             <div id="fileInfo" class="file-info hidden">
 
@@ -49,6 +55,7 @@
                     <strong>Size:</strong>
                     <span id="fileSize">-</span>
                 </p>
+
                 <p>
                     <strong>Bytes loaded:</strong>
                     <span id="bytesLoaded">-</span>
@@ -58,7 +65,7 @@
                     <strong>Chunk size:</strong>
                     <span id="chunkSize">-</span>
                 </p>
-                
+
                 <p>
                     <strong>Total chunks:</strong>
                     <span id="totalChunks">-</span>
@@ -68,7 +75,7 @@
                     <strong>Reconstructed bytes:</strong>
                     <span id="reconstructedBytes">-</span>
                 </p>
-                
+
                 <p>
                     <strong>Chunk integrity:</strong>
                     <span id="chunkIntegrity">-</span>
@@ -78,7 +85,106 @@
 
         </section>
 
+
+        <!-- ============================================
+             QR FRAME / TRANSMISSION
+             ============================================ -->
+
+        <section class="card">
+
+            <h2>QR Transmission</h2>
+
+            <p class="description">
+                Sequentially display each protocol frame as a QR code.
+            </p>
+
+
+            <div id="qrContainer">
+
+                <canvas id="qrCanvas"></canvas>
+
+            </div>
+
+
+            <!-- FRAME INFORMATION -->
+
+            <p>
+                <strong>Current Frame:</strong>
+                <span id="currentFrame">-</span>
+            </p>
+
+            <p>
+                <strong>Total Frames:</strong>
+                <span id="totalFrames">-</span>
+            </p>
+
+            <p>
+                <strong>Session ID:</strong>
+                <span id="sessionId">-</span>
+            </p>
+
+
+            <!-- TRANSMISSION SETTINGS -->
+
+            <div class="transmission-controls">
+
+                <p>
+                    <strong>Frame Rate:</strong>
+
+                    <select id="fpsSelect">
+
+                        <option value="1">1 FPS</option>
+                        <option value="2">2 FPS</option>
+                        <option value="5" selected>5 FPS</option>
+                        <option value="10">10 FPS</option>
+
+                    </select>
+
+                </p>
+
+
+                <button id="startTransmission" type="button" disabled>
+                    Start Transmission
+                </button>
+
+
+                <button id="stopTransmission" type="button" disabled>
+                    Stop Transmission
+                </button>
+
+            </div>
+
+
+            <!-- PROGRESS -->
+
+            <p>
+                <strong>Progress:</strong>
+                <span id="transmissionProgress">0%</span>
+            </p>
+
+            <p>
+                <strong>Elapsed Time:</strong>
+                <span id="elapsedTime">0.00 s</span>
+            </p>
+
+            <p>
+                <strong>Transmission Status:</strong>
+                <span id="transmissionStatus">
+                    Waiting for file...
+                </span>
+            </p>
+
+            <p>
+                <strong>QR Status:</strong>
+                <span id="qrStatus">
+                    Waiting for frame...
+                </span>
+            </p>
+
+        </section>
+
     </main>
+
 
 
 </body>

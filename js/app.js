@@ -4,6 +4,8 @@ import {
     serializeFrame
 } from "./protocol.js";
 
+import QRCode from "qrcode";
+
 
 // ============================================
 // DOM ELEMENTS
@@ -41,10 +43,77 @@ const chunkIntegrity =
 
 
 // ============================================
+// QR ELEMENTS
+// ============================================
+
+const qrCanvas =
+    document.getElementById("qrCanvas");
+
+const currentFrame =
+    document.getElementById("currentFrame");
+
+const totalFrames =
+    document.getElementById("totalFrames");
+
+const sessionIdElement =
+    document.getElementById("sessionId");
+
+const qrStatus =
+    document.getElementById("qrStatus");
+
+
+// ============================================
+// TRANSMISSION ELEMENTS
+// ============================================
+
+const fpsSelect =
+    document.getElementById("fpsSelect");
+
+const startTransmission =
+    document.getElementById("startTransmission");
+
+const stopTransmission =
+    document.getElementById("stopTransmission");
+
+const transmissionProgress =
+    document.getElementById(
+        "transmissionProgress"
+    );
+
+const elapsedTime =
+    document.getElementById("elapsedTime");
+
+const transmissionStatus =
+    document.getElementById(
+        "transmissionStatus"
+    );
+
+
+// ============================================
 // CONFIGURATION
 // ============================================
 
 const CHUNK_SIZE = 1024;
+
+const QR_SIZE = 300;
+
+const QR_MARGIN = 2;
+
+const QR_ERROR_CORRECTION =
+    "M";
+
+
+// ============================================
+// TRANSMISSION STATE
+// ============================================
+
+let frames = [];
+
+let transmissionRunning = false;
+
+let transmissionStartTime = 0;
+
+let currentFrameIndex = 0;
 
 
 // ============================================
@@ -54,6 +123,21 @@ const CHUNK_SIZE = 1024;
 fileInput.addEventListener(
     "change",
     handleFileSelection
+);
+
+
+// ============================================
+// START / STOP BUTTONS
+// ============================================
+
+startTransmission.addEventListener(
+    "click",
+    startQRTransmission
+);
+
+stopTransmission.addEventListener(
+    "click",
+    stopQRTransmission
 );
 
 
@@ -72,7 +156,19 @@ async function handleFileSelection(event) {
 
 
     // ----------------------------------------
-    // 1. Display file information
+    // Reset previous transmission
+    // ----------------------------------------
+
+    stopQRTransmission();
+
+
+    frames = [];
+
+    currentFrameIndex = 0;
+
+
+    // ----------------------------------------
+    // Display file information
     // ----------------------------------------
 
     fileName.textContent =
@@ -90,7 +186,7 @@ async function handleFileSelection(event) {
     try {
 
         // ------------------------------------
-        // 2. Read file into memory
+        // 1. Read file into memory
         // ------------------------------------
 
         const arrayBuffer =
@@ -104,7 +200,7 @@ async function handleFileSelection(event) {
 
 
         // ------------------------------------
-        // 3. Split file into chunks
+        // 2. Split file into chunks
         // ------------------------------------
 
         const chunks =
@@ -113,18 +209,18 @@ async function handleFileSelection(event) {
                 CHUNK_SIZE
             );
 
-        const totalChunks =
+        const totalChunkCount =
             chunks.length;
 
         chunkSize.textContent =
             `${CHUNK_SIZE.toLocaleString()} bytes`;
 
         totalChunksElement.textContent =
-            totalChunks.toLocaleString();
+            totalChunkCount.toLocaleString();
 
 
         // ------------------------------------
-        // 4. Reconstruct file
+        // 3. Reconstruct file
         // ------------------------------------
 
         const reconstructed =
@@ -137,7 +233,7 @@ async function handleFileSelection(event) {
 
 
         // ------------------------------------
-        // 5. Verify chunk integrity
+        // 4. Verify chunk integrity
         // ------------------------------------
 
         const isValid =
@@ -159,18 +255,22 @@ async function handleFileSelection(event) {
 
 
         // ------------------------------------
-        // 6. Create transfer session
+        // 5. Create transfer session
         // ------------------------------------
 
         const sessionId =
             createSessionId();
 
 
+        sessionIdElement.textContent =
+            sessionId;
+
+
         // ------------------------------------
-        // 7. Create protocol frames
+        // 6. Create protocol frames
         // ------------------------------------
 
-        const frames = [];
+        frames = [];
 
         for (
             let i = 0;
@@ -182,7 +282,7 @@ async function handleFileSelection(event) {
                 createDataFrame(
                     sessionId,
                     i,
-                    totalChunks,
+                    totalChunkCount,
                     chunks[i]
                 );
 
@@ -191,7 +291,49 @@ async function handleFileSelection(event) {
 
 
         // ------------------------------------
-        // 8. Debug frame information
+        // 7. Display frame information
+        // ------------------------------------
+
+        totalFrames.textContent =
+            frames.length;
+
+        currentFrame.textContent =
+            "0";
+
+        transmissionProgress.textContent =
+            "0%";
+
+        elapsedTime.textContent =
+            "0.00 s";
+
+
+        // ------------------------------------
+        // 8. Display first frame
+        // ------------------------------------
+
+        await displayFrame(0);
+
+
+        // ------------------------------------
+        // 9. Enable transmission
+        // ------------------------------------
+
+        startTransmission.disabled =
+            false;
+
+        stopTransmission.disabled =
+            true;
+
+
+        transmissionStatus.textContent =
+            "Ready to transmit";
+
+        qrStatus.textContent =
+            "Frame 0 ready ✓";
+
+
+        // ------------------------------------
+        // Debug information
         // ------------------------------------
 
         console.log(
@@ -199,7 +341,7 @@ async function handleFileSelection(event) {
         );
 
         console.log(
-            "FRAME PROTOCOL"
+            "SENDER 5 - SEQUENTIAL QR STREAM"
         );
 
         console.log(
@@ -233,11 +375,6 @@ async function handleFileSelection(event) {
         );
 
         console.log(
-            "Last frame:",
-            frames[frames.length - 1]
-        );
-
-        console.log(
             "================================"
         );
 
@@ -251,7 +388,377 @@ async function handleFileSelection(event) {
 
         chunkIntegrity.textContent =
             "ERROR";
+
+        qrStatus.textContent =
+            "QR generation failed ✗";
+
+        transmissionStatus.textContent =
+            "Error";
     }
+}
+
+
+// ============================================
+// DISPLAY ONE FRAME
+// ============================================
+
+async function displayFrame(
+    frameIndex
+) {
+
+    if (
+        frameIndex < 0 ||
+        frameIndex >= frames.length
+    ) {
+
+        return;
+    }
+
+
+    const frame =
+        frames[frameIndex];
+
+
+    const serializedFrame =
+        serializeFrame(
+            frame
+        );
+
+
+    // ----------------------------------------
+    // Generate QR
+    // ----------------------------------------
+
+    await QRCode.toCanvas(
+        qrCanvas,
+        serializedFrame,
+        {
+            width: QR_SIZE,
+            margin: QR_MARGIN,
+            errorCorrectionLevel:
+                QR_ERROR_CORRECTION
+        }
+    );
+
+
+    // ----------------------------------------
+    // Update UI
+    // ----------------------------------------
+
+    currentFrame.textContent =
+        frame.frameId;
+
+    totalFrames.textContent =
+        frame.totalFrames;
+
+    sessionIdElement.textContent =
+        frame.sessionId;
+
+
+    const progress =
+        (
+            (frameIndex + 1) /
+            frames.length
+        ) * 100;
+
+
+    transmissionProgress.textContent =
+        `${progress.toFixed(1)}%`;
+
+
+    qrStatus.textContent =
+        `Frame ${frame.frameId} displayed ✓`;
+
+
+    console.log(
+        "Displaying frame:",
+        frame.frameId,
+        "/",
+        frame.totalFrames
+    );
+}
+
+
+// ============================================
+// START SEQUENTIAL QR TRANSMISSION
+// ============================================
+
+async function startQRTransmission() {
+
+    if (
+        transmissionRunning ||
+        frames.length === 0
+    ) {
+
+        return;
+    }
+
+
+    transmissionRunning =
+        true;
+
+    transmissionStartTime =
+        performance.now();
+
+
+    currentFrameIndex = 0;
+
+
+    startTransmission.disabled =
+        true;
+
+    stopTransmission.disabled =
+        false;
+
+    fpsSelect.disabled =
+        true;
+
+
+    transmissionStatus.textContent =
+        "Transmitting...";
+
+
+    console.log(
+        "================================"
+    );
+
+    console.log(
+        "QR TRANSMISSION STARTED"
+    );
+
+    console.log(
+        "FPS:",
+        fpsSelect.value
+    );
+
+    console.log(
+        "Total frames:",
+        frames.length
+    );
+
+    console.log(
+        "================================"
+    );
+
+
+    while (
+        transmissionRunning &&
+        currentFrameIndex < frames.length
+    ) {
+
+        const frameStartTime =
+            performance.now();
+
+
+        await displayFrame(
+            currentFrameIndex
+        );
+
+
+        if (!transmissionRunning) {
+            break;
+        }
+
+
+        currentFrameIndex++;
+
+
+        updateElapsedTime();
+
+
+        // ------------------------------------
+        // Calculate frame interval
+        // ------------------------------------
+
+        const fps =
+            Number(
+                fpsSelect.value
+            );
+
+
+        const frameInterval =
+            1000 / fps;
+
+
+        const processingTime =
+            performance.now() -
+            frameStartTime;
+
+
+        const remainingDelay =
+            Math.max(
+                0,
+                frameInterval -
+                processingTime
+            );
+
+
+        if (
+            currentFrameIndex <
+            frames.length
+        ) {
+
+            await sleep(
+                remainingDelay
+            );
+        }
+    }
+
+
+    // ========================================
+    // TRANSMISSION FINISHED
+    // ========================================
+
+    if (
+        transmissionRunning &&
+        currentFrameIndex >= frames.length
+    ) {
+
+        transmissionRunning =
+            false;
+
+
+        updateElapsedTime();
+
+
+        transmissionProgress.textContent =
+            "100%";
+
+
+        currentFrame.textContent =
+            frames.length - 1;
+
+
+        transmissionStatus.textContent =
+            "Transmission complete ✓";
+
+
+        qrStatus.textContent =
+            "All frames transmitted ✓";
+
+
+        console.log(
+            "================================"
+        );
+
+        console.log(
+            "QR TRANSMISSION COMPLETE"
+        );
+
+        console.log(
+            "Total frames:",
+            frames.length
+        );
+
+        console.log(
+            "Elapsed time:",
+            elapsedTime.textContent
+        );
+
+        console.log(
+            "================================"
+        );
+    }
+
+
+    startTransmission.disabled =
+        false;
+
+    stopTransmission.disabled =
+        true;
+
+    fpsSelect.disabled =
+        false;
+}
+
+
+// ============================================
+// STOP TRANSMISSION
+// ============================================
+
+function stopQRTransmission() {
+
+    if (!transmissionRunning) {
+
+        startTransmission.disabled =
+            frames.length === 0;
+
+        stopTransmission.disabled =
+            true;
+
+        fpsSelect.disabled =
+            false;
+
+        return;
+    }
+
+
+    transmissionRunning =
+        false;
+
+
+    startTransmission.disabled =
+        false;
+
+    stopTransmission.disabled =
+        true;
+
+    fpsSelect.disabled =
+        false;
+
+
+    transmissionStatus.textContent =
+        "Transmission stopped";
+
+
+    qrStatus.textContent =
+        `Stopped at frame ${currentFrameIndex}`;
+
+
+    console.log(
+        "QR transmission stopped."
+    );
+}
+
+
+// ============================================
+// UPDATE ELAPSED TIME
+// ============================================
+
+function updateElapsedTime() {
+
+    if (!transmissionStartTime) {
+        return;
+    }
+
+
+    const elapsed =
+        (
+            performance.now() -
+            transmissionStartTime
+        ) / 1000;
+
+
+    elapsedTime.textContent =
+        `${elapsed.toFixed(2)} s`;
+}
+
+
+// ============================================
+// SLEEP / DELAY
+// ============================================
+
+function sleep(
+    milliseconds
+) {
+
+    return new Promise(
+        resolve =>
+            setTimeout(
+                resolve,
+                milliseconds
+            )
+    );
 }
 
 
